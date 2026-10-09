@@ -7,14 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       platform:
-        description: Build all platforms, or retry Windows using an existing draft
+        description: Build all platforms or Windows only
         type: choice
         options:
           - all
           - windows
         default: all
       release_tag:
-        description: Existing draft tag for a Windows retry from main (otherwise leave empty)
+        description: Version tag for a Windows-only release or draft retry from main
         type: string
         default: ""
 
@@ -55,7 +55,7 @@ jobs:
         run: |
           if [[ -n "$RETRY_TAG" ]]; then
             if [[ "$GITHUB_EVENT_NAME" != workflow_dispatch || "$PLATFORM" != windows || "$GITHUB_REF" != refs/heads/main ]]; then
-              echo "A release_tag override is only allowed for a Windows retry from main."
+              echo "A release_tag override is only allowed for a Windows-only release from main."
               exit 1
             fi
           fi
@@ -103,19 +103,20 @@ jobs:
               exit 1
             }
           else
-            if [[ "$PLATFORM" == windows ]]; then
-              echo "A Windows-only retry requires an existing unpublished release draft."
-              exit 1
-            fi
             extra=()
             if [[ "$PRERELEASE" == true ]]; then extra+=(--prerelease); fi
-            gh release create "$RELEASE_TAG" --verify-tag --draft \
+            if [[ -n "$RETRY_TAG" ]]; then
+              # A new manual release creates its tag at this commit on publication.
+              extra+=(--target "$GITHUB_SHA")
+            else
+              extra+=(--verify-tag)
+            fi
+            gh release create "$RELEASE_TAG" --draft \
               --title "$RELEASE_TITLE" \
               --notes-file "docs/releases/$RELEASE_TAG.md" "${extra[@]}"
           fi
-          if [[ -n "$RETRY_TAG" ]]; then
+          if [[ -n "$RETRY_TAG" ]] && gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" > /dev/null 2>&1; then
             # The workflow token updates the draft's tag without starting another push workflow.
-            gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" > /dev/null
             tag_object=$(gh api --method POST "repos/$GH_REPO/git/tags" \
               -f tag="$RELEASE_TAG" -f message="$RELEASE_TITLE" \
               -f object="$GITHUB_SHA" -f type=commit --jq .sha)
@@ -197,10 +198,11 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.prepare.outputs.release-tag }}
           PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+          PLATFORM: ${{ inputs.platform || 'all' }}
         run: |
           mkdir assets
           gh release download "$RELEASE_TAG" --dir assets --skip-existing
-          python3 .github/scripts/verify-release-assets.py assets "${RELEASE_TAG#v}"
+          python3 .github/scripts/verify-release-assets.py assets "${RELEASE_TAG#v}" "$PLATFORM"
           gh release upload "$RELEASE_TAG" assets/SHA256SUMS.txt --clobber
           if [[ "$PRERELEASE" == true ]]; then
             gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false

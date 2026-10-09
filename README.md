@@ -4,7 +4,7 @@ A desktop app for controlling LG U+ / TONLY MTTL-W01 smart power strips on your 
 
 The app receives telemetry directly from the strips and stores it in a local SQLite database. It does not require a cloud account. This is an independent project, unaffiliated with LG U+ or TONLY.
 
-**0.0.1 Alpha** (`v0.0.1-alpha.1`) is the first public release. Expect rough edges; platform and hardware limitations are listed below.
+**0.0.1 Alpha 2** (`v0.0.1-alpha.2`) is a Windows-only update with native Wi-Fi discovery. The first alpha remains available for Linux and macOS. Expect rough edges; platform and hardware limitations are listed below.
 
 ![MTTL Control power overview showing connected strips and live telemetry](screenshot.png)
 
@@ -35,6 +35,8 @@ On Linux, install the package with your package manager, or make the AppImage ex
 The first Windows installers are unsigned, and macOS downloads use ad-hoc signatures without Apple notarization. Windows may show an unknown-publisher prompt. After attempting to open the macOS app, approve it in **System Settings → Privacy & Security → Open Anyway** if you trust the download; see [Apple's instructions](https://support.apple.com/en-us/102445). Do not disable system-wide protection. Release assets include `SHA256SUMS.txt` to verify downloads.
 
 Linux is the primary development platform. The release workflow builds all listed platforms and runs their Rust checks; Windows and macOS hardware operation and native interface behavior still need hands-on verification. Automatic provisioning requires `nmcli` and a NetworkManager-managed Wi-Fi adapter on Linux; use manual device setup on Windows and macOS.
+
+Windows Wi-Fi discovery uses the native WLAN API. Enable Wi-Fi and the WLAN AutoConfig service. If Windows denies scanning, enable Location services and app location access under **Settings > Privacy & security > Location**, then click **Scan Wi-Fi** again. Discovery does not switch networks; Windows setup still requires joining the strip's access point manually.
 
 ## Build and run
 

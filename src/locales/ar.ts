@@ -692,6 +692,16 @@ export const arabic: Record<string, string> = {
     "لا يمكن أن تتضمن بيانات Wi-Fi نقطتين رأسيتين أو أسطرًا جديدة أو محارف NUL",
   "Wi-Fi discovery failed. Check NetworkManager and the wireless adapter.":
     "فشل اكتشاف Wi-Fi. تحقّق من NetworkManager ومحوّل الشبكة اللاسلكية.",
+  "Windows denied Wi-Fi discovery. Enable Location services and app location access in Settings > Privacy & security > Location, then scan again.":
+    "رفض Windows اكتشاف Wi-Fi. فعّل خدمات الموقع ووصول التطبيقات إلى الموقع من الإعدادات > الخصوصية والأمان > الموقع، ثم أعد الفحص.",
+  "Wi-Fi discovery failed. Start the Windows WLAN AutoConfig service, then scan again.":
+    "فشل اكتشاف Wi-Fi. شغّل خدمة WLAN AutoConfig في Windows، ثم أعد الفحص.",
+  "Wi-Fi is turned off. Enable the wireless adapter and turn off airplane mode, then scan again.":
+    "Wi-Fi متوقف. فعّل محوّل الشبكة اللاسلكية وأوقف وضع الطيران، ثم أعد الفحص.",
+  "No Windows Wi-Fi adapter found. Enable or connect a wireless adapter, then scan again.":
+    "لم يُعثر على محوّل Wi-Fi في Windows. فعّل أو وصّل محوّل شبكة لاسلكية، ثم أعد الفحص.",
+  "Windows could not complete the Wi-Fi scan. Check the wireless adapter and scan again.":
+    "تعذّر على Windows إكمال فحص Wi-Fi. تحقّق من محوّل الشبكة اللاسلكية وأعد الفحص.",
   "Device command queue timed out": "انتهت مهلة قائمة أوامر الجهاز",
   "Channel must be between 1 and 4": "يجب أن تكون القناة من 1 إلى 4",
   "No strips are connected": "لا توجد مشتركات متصلة",

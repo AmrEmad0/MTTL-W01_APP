@@ -1,4 +1,4 @@
-#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[cfg(target_os = "linux")]
 use std::process::Command;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -6,9 +6,9 @@ use tokio::net::TcpStream;
 use tokio::time::timeout;
 
 use crate::mttl::CMD_REBOOT;
-#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[cfg(target_os = "linux")]
 use crate::mttl::derive_ap_password;
-#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[cfg(target_os = "linux")]
 use crate::types::DetectedStripAp;
 use crate::types::{
     ProvisionResult, ProvisionStep, SetupCommandResponse, SetupProbeItem, SetupProbeResult,
@@ -66,7 +66,12 @@ pub fn detect_system_wifi() -> Result<SystemWifiInfo, String> {
     Err("Wi-Fi discovery is unavailable on this platform. Use manual device setup.".into())
 }
 
-#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[cfg(target_os = "windows")]
+pub fn detect_system_wifi() -> Result<SystemWifiInfo, String> {
+    crate::wifi_windows::detect()
+}
+
+#[cfg(target_os = "linux")]
 pub fn detect_system_wifi() -> Result<SystemWifiInfo, String> {
     let mut active_ssid = None;
     let mut detected_strip_aps = Vec::new();
@@ -146,93 +151,6 @@ pub fn detect_system_wifi() -> Result<SystemWifiInfo, String> {
         let clean = psk.trim().to_string();
         if !clean.is_empty() {
             active_psk = Some(clean);
-        }
-    }
-
-    // Windows: Query WLAN via netsh
-    #[cfg(target_os = "windows")]
-    {
-        // 1. Check current connected interface
-        if let Ok(output) = Command::new("netsh")
-            .args(["wlan", "show", "interfaces"])
-            .output()
-            && let Ok(text) = String::from_utf8(output.stdout)
-        {
-            for line in text.lines() {
-                let trimmed = line.trim();
-                if trimmed.starts_with("SSID")
-                    && !trimmed.starts_with("BSSID")
-                    && let Some(idx) = trimmed.find(':')
-                {
-                    let val = trimmed[idx + 1..].trim();
-                    if !val.is_empty() {
-                        active_ssid = Some(val.to_string());
-                    }
-                }
-            }
-        }
-
-        // 2. Scan available networks
-        if let Ok(output) = Command::new("netsh")
-            .args(["wlan", "show", "networks", "mode=bssid"])
-            .output()
-            && let Ok(text) = String::from_utf8(output.stdout)
-        {
-            let mut current_scanned_ssid = String::new();
-            for line in text.lines() {
-                let trimmed = line.trim();
-                if trimmed.starts_with("SSID ")
-                    && let Some(idx) = trimmed.find(':')
-                {
-                    current_scanned_ssid = trimmed[idx + 1..].trim().to_string();
-                    if !current_scanned_ssid.is_empty()
-                        && !available_ssids.contains(&current_scanned_ssid)
-                    {
-                        available_ssids.push(current_scanned_ssid.clone());
-                    }
-                } else if trimmed.starts_with("BSSID ")
-                    && !current_scanned_ssid.is_empty()
-                    && let Some(idx) = trimmed.find(':')
-                {
-                    let bssid = trimmed[idx + 1..].trim().to_uppercase();
-                    if current_scanned_ssid.starts_with("TONLY_TAP_")
-                        || current_scanned_ssid.starts_with("ONLY_TAP_")
-                    {
-                        let derived = derive_ap_password(&current_scanned_ssid);
-                        if !detected_strip_aps.iter().any(|d: &DetectedStripAp| {
-                            d.ssid == current_scanned_ssid && d.bssid == bssid
-                        }) {
-                            detected_strip_aps.push(DetectedStripAp {
-                                ssid: current_scanned_ssid.clone(),
-                                bssid,
-                                derived_password: derived,
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        // 3. Saved Wi-Fi password
-        if let Some(ref ssid) = active_ssid {
-            let profile_arg = format!("name=\"{}\"", ssid);
-            if let Ok(output) = Command::new("netsh")
-                .args(["wlan", "show", "profile", &profile_arg, "key=clear"])
-                .output()
-                && let Ok(text) = String::from_utf8(output.stdout)
-            {
-                for line in text.lines() {
-                    let trimmed = line.trim();
-                    if trimmed.starts_with("Key Content")
-                        && let Some(idx) = trimmed.find(':')
-                    {
-                        let key = trimmed[idx + 1..].trim();
-                        if !key.is_empty() {
-                            active_psk = Some(key.to_string());
-                        }
-                    }
-                }
-            }
         }
     }
 

@@ -1,6 +1,6 @@
 [package]
 name = "mttl-control"
-version = "0.0.1-alpha.1"
+version = "0.0.1-alpha.2"
 description = "Local desktop controller for MTTL-W01 smart power strips"
 authors = ["AmrEmad0"]
 license = "MIT"
@@ -24,6 +24,13 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
 regex = "1"
 socket2 = "0.5"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_NetworkManagement_WiFi"] }
+quick-xml = "0.42"
+
+[dev-dependencies]
+quick-xml = "0.42"
 
 [profile.release]
 codegen-units = 1

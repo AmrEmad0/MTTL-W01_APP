@@ -1,13 +1,15 @@
-"""Require every supported installer for this version before writing checksums."""
+"""Require every selected installer for this version before writing checksums."""
 
 import hashlib
 from pathlib import Path
 import sys
 
 
-def expected_assets(version: str) -> set[str]:
+def expected_assets(version: str, platform: str = "all") -> set[str]:
+    if platform not in ("all", "windows"):
+        raise ValueError(f"Unsupported release platform: {platform}")
     prefix = f"MTTL-Control_{version}_"
-    return {
+    expected = {
         prefix + suffix
         for suffix in (
             "linux_amd64.deb",
@@ -19,14 +21,17 @@ def expected_assets(version: str) -> set[str]:
             "darwin_x64.dmg",
         )
     }
+    if platform == "windows":
+        expected = {name for name in expected if name.startswith(prefix + "windows_")}
+    return expected
 
 
-def verify_assets(directory: Path, version: str) -> Path:
+def verify_assets(directory: Path, version: str, platform: str = "all") -> Path:
     files = sorted(
         path for path in directory.iterdir()
         if path.is_file() and path.name != "SHA256SUMS.txt"
     )
-    missing = expected_assets(version) - {path.name for path in files}
+    missing = expected_assets(version, platform) - {path.name for path in files}
     if missing:
         raise ValueError("Missing release assets: " + ", ".join(sorted(missing)))
     for path in files:
@@ -46,10 +51,11 @@ def verify_assets(directory: Path, version: str) -> Path:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        raise SystemExit("Usage: verify-release-assets.py ASSET_DIRECTORY VERSION")
+    if len(sys.argv) not in (3, 4):
+        raise SystemExit("Usage: verify-release-assets.py ASSET_DIRECTORY VERSION [all|windows]")
     try:
-        result = verify_assets(Path(sys.argv[1]), sys.argv[2])
+        platform = sys.argv[3] if len(sys.argv) == 4 else "all"
+        result = verify_assets(Path(sys.argv[1]), sys.argv[2], platform)
     except (ValueError, OSError) as error:
         raise SystemExit(str(error)) from error
-    print(f"Verified all seven installers and wrote {result}.")
+    print(f"Verified {platform} installers and wrote {result}.")

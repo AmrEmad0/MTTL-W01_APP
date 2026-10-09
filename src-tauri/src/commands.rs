@@ -337,8 +337,9 @@ pub async fn connect_system_wifi(ssid: String, password: Option<String>) -> Resu
     {
         // netsh connects an existing Wi-Fi profile; credentials belong to that profile.
         let _ = password;
-        let profile_arg = format!("name=\"{}\"", ssid);
+        let profile_arg = format!("name={}", ssid);
         let mut command = tokio::process::Command::new("netsh");
+        command.creation_flags(0x08000000); // CREATE_NO_WINDOW
         command.kill_on_drop(true);
         command.args(["wlan", "connect", &profile_arg]);
         let out = tokio::time::timeout(std::time::Duration::from_secs(25), command.output())

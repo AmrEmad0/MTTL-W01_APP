@@ -7,6 +7,8 @@ mod provision;
 mod scanner;
 mod server;
 mod types;
+#[cfg(any(target_os = "windows", test))]
+mod wifi_windows;
 
 use std::sync::Arc;
 use tauri::Manager;

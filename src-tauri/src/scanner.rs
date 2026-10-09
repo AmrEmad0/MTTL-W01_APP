@@ -113,9 +113,16 @@ pub fn get_arp_cache() -> HashMap<String, String> {
     }
 
     #[cfg(target_os = "windows")]
-    if let Ok(output) = std::process::Command::new("arp").arg("-a").output()
-        && let Ok(text) = String::from_utf8(output.stdout)
+    use std::os::windows::process::CommandExt;
+
+    #[cfg(target_os = "windows")]
+    if let Ok(output) = std::process::Command::new("arp")
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
+        .arg("-a")
+        .output()
     {
+        // Only IP/MAC columns matter; localized headings need not be UTF-8.
+        let text = String::from_utf8_lossy(&output.stdout);
         for line in text.lines() {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 3 {

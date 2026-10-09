@@ -142,6 +142,26 @@ class AssetTests(unittest.TestCase):
         self.assertEqual(output.read_text(), expected)
         self.assertEqual(assets.verify_assets(self.directory, self.version).read_text(), expected)
 
+    def test_windows_only_release_requires_both_installers(self):
+        windows = assets.expected_assets(self.version, "windows")
+        self.assertEqual(len(windows), 2)
+        for path in self.directory.iterdir():
+            if path.name not in windows:
+                path.unlink()
+        output = assets.verify_assets(self.directory, self.version, "windows")
+        self.assertEqual(len(output.read_text().splitlines()), 2)
+        with self.assertRaisesRegex(ValueError, "Missing release assets"):
+            assets.verify_assets(self.directory, self.version)
+        output.unlink()
+        (self.directory / f"MTTL-Control_{self.version}_windows_x64.msi").unlink()
+        with self.assertRaisesRegex(ValueError, "Missing release assets"):
+            assets.verify_assets(self.directory, self.version, "windows")
+        self.assertFalse(output.exists())
+
+    def test_unknown_release_platform_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported release platform"):
+            assets.verify_assets(self.directory, self.version, "macos")
+
     def test_missing_architecture_never_writes_checksums(self):
         (self.directory / f"MTTL-Control_{self.version}_darwin_aarch64.dmg").unlink()
         with self.assertRaisesRegex(ValueError, "Missing release assets"):
