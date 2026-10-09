@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Local control and energy history for MTTL-W01 smart power strips."
+    />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <script>
+      try {
+        document.documentElement.dataset.theme =
+          localStorage.getItem("mttl-theme") === "light" ? "light" : "dark";
+      } catch {
+        document.documentElement.dataset.theme = "dark";
+      }
+    </script>
+    <script>
+      let language = "ar";
+      try {
+        language = localStorage.getItem("mttl-language") === "en" ? "en" : "ar";
+      } catch {}
+      document.documentElement.lang = language;
+      document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
+      document.title =
+        language === "ar"
+          ? "MTTL Control | إدارة الطاقة"
+          : "MTTL Control | Power Control";
+    </script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

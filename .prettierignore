@@ -1,0 +1,7 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+bun.lock
+src/assets/fonts/
+MTTL_CONTROLLER_PROTOCOL_GUIDE.md
