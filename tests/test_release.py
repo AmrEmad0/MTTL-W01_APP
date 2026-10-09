@@ -71,6 +71,58 @@ class ReleaseTests(unittest.TestCase):
                 release.check_release(f"v{version}", "tag", root)
 
 
+    def test_release_gate_rejects_invalid_msi_override(self):
+        version = json.loads((ROOT / "package.json").read_text())["version"]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in ["package.json", "src-tauri/tauri.conf.json", "src-tauri/Cargo.toml", "src-tauri/Cargo.lock"]:
+                destination = root / name
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes((ROOT / name).read_bytes())
+            config_path = root / "src-tauri/tauri.conf.json"
+            config = json.loads(config_path.read_text())
+            config["bundle"]["windows"]["wix"]["version"] = "alpha.1"
+            config_path.write_text(json.dumps(config))
+            with self.assertRaisesRegex(ValueError, "bundle.windows.wix.version"):
+                release.check_release(f"v{version}", "tag", root)
+
+
+class MsiVersionTests(unittest.TestCase):
+    def test_alpha_with_numeric_override(self):
+        release.check_msi_version("0.0.1-alpha.1", "0.0.1.1")
+
+    def test_stable_and_numeric_prerelease_without_override(self):
+        release.check_msi_version("0.0.1", None)
+        release.check_msi_version("0.0.1-1", None)
+
+    def test_rejects_alpha_without_override(self):
+        with self.assertRaisesRegex(ValueError, "numeric"):
+            release.check_msi_version("0.0.1-alpha.1", None)
+
+    def test_rejects_invalid_override_formats(self):
+        for override in ["", "0.0.1-alpha.1", "0.0", "0.0.1.1.1", "0.0.1.-1", 1]:
+            with self.subTest(override=override), self.assertRaisesRegex(ValueError, "numeric"):
+                release.check_msi_version("0.0.1-alpha.1", override)
+
+    def test_rejects_versions_outside_msi_bounds(self):
+        for version, override in [
+            ("256.0.1", "256.0.1.1"),
+            ("0.256.1", "0.256.1.1"),
+            ("0.0.65536", "0.0.65536.1"),
+            ("0.0.1", "0.0.1.65536"),
+            ("0.0.1-65536", None),
+        ]:
+            with self.subTest(override=override), self.assertRaisesRegex(ValueError, "cannot exceed"):
+                release.check_msi_version(version, override)
+
+    def test_accepts_msi_upper_bounds(self):
+        release.check_msi_version("255.255.65535-alpha.1", "255.255.65535.65535")
+
+    def test_rejects_override_for_another_app_version(self):
+        with self.assertRaisesRegex(ValueError, "must match app version"):
+            release.check_msi_version("0.0.1-alpha.1", "0.0.2.1")
+
+
 class AssetTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

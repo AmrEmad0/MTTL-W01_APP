@@ -34,7 +34,7 @@ Automatic Dependabot version PRs are disabled for the alpha with `open-pull-requ
 
 ## Create a version
 
-1. Update `version` in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` together. Run `cargo check --manifest-path src-tauri/Cargo.toml` to update the package version in `Cargo.lock`.
+1. Update `version` in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` together. Update `bundle.windows.wix.version` in the Tauri config to a numeric MSI version with the same first three components (for example, `0.0.1.1` for `0.0.1-alpha.1`). Run `cargo check --manifest-path src-tauri/Cargo.toml` to update the package version in `Cargo.lock`.
 2. Write `docs/releases/vVERSION.md` with changes, installation notes, and known limitations. Include physical-device and platform test results when available.
 3. Run `bun run check`, `bun run build`, and `bun run check:rust`. Review the dependency audits and bundled licenses.
 4. Commit the changes and push the branch. Wait for Checks to pass, then push an annotated tag on that commit:
@@ -45,15 +45,17 @@ git tag -a v0.0.1-alpha.2 -m "MTTL Control 0.0.1 Alpha 2"
 git push origin v0.0.1-alpha.2
 ```
 
-Use the new version instead of `v0.0.1-alpha.2` for later releases. Tags with a suffix, such as `v0.0.1-alpha.2`, create a GitHub prerelease. The first heading of the release notes supplies the release title. The workflow rejects malformed tags, versions that disagree with the manifests or lockfile, and missing release notes.
+Use the new version instead of `v0.0.1-alpha.2` for later releases. Tags with a suffix, such as `v0.0.1-alpha.2`, create a GitHub prerelease. The first heading of the release notes supplies the release title. The workflow rejects malformed tags, versions that disagree with the manifests or lockfile, invalid MSI versions, and missing release notes.
 
 ## Failed builds
+
+MSI requires a numeric `major.minor.patch[.build]` version and cannot derive one from an app version such as `0.0.1-alpha.1`. Keep the alpha app version and release tag, and set the separate [`bundle.windows.wix.version`](https://v2.tauri.app/reference/config/#wixconfig) override. The first alpha uses `0.0.1.1` for MSI; download filenames still use `0.0.1-alpha.1`. The release gate checks the override before building installers.
 
 A Windows test process that exits before running tests with `STATUS_ENTRYPOINT_NOT_FOUND` usually lacks the Common Controls v6 manifest. The build script embeds `src-tauri/windows-app-manifest.xml` through the MSVC linker for both the app and its test executables, following [Tauri's workaround](https://github.com/tauri-apps/tauri/issues/13419#issuecomment-3398457618). Keep this manifest when updating the Windows build.
 
 A failed job leaves the release unpublished as a draft. Inspect its logs in GitHub Actions. For a temporary runner or download error, rerun the workflow on the same tag; it can reuse the draft. A published version cannot be replaced by this workflow.
 
-For a code fix, push the correction on the development branch and create a new version and tag. Do not move an existing published tag. The manual workflow trigger is available for an existing version tag; selecting a branch is rejected.
+For a code fix, push the correction on the development branch and create a new version and tag. The initial alpha can instead retain its version while its release is still an unpublished draft: commit the fix, move the local annotated tag to that commit, and push the branch and tag together using a lease restricted to that tag and its previous remote object ID. This starts a fresh workflow with the correction. Rerunning an old workflow uses its original source commit and does not pick up the fix. Do not move an existing published tag. The manual workflow trigger is available for an existing version tag; selecting a branch is rejected.
 
 ## Signing and availability
 
