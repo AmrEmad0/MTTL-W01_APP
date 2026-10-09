@@ -68,6 +68,7 @@ def check_release(tag: str, ref_type: str, root: Path) -> dict[str, str]:
         raise ValueError("Release notes must begin with a '# Release title' heading.")
 
     return {
+        "tag": tag,
         "version": version,
         "title": heading[2:].strip(),
         "prerelease": str("-" in version).lower(),

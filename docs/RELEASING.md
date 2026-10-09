@@ -55,7 +55,21 @@ A Windows test process that exits before running tests with `STATUS_ENTRYPOINT_N
 
 A failed job leaves the release unpublished as a draft. Inspect its logs in GitHub Actions. For a temporary runner or download error, rerun the workflow on the same tag; it can reuse the draft. A published version cannot be replaced by this workflow.
 
-For a code fix, push the correction on the development branch and create a new version and tag. The initial alpha can instead retain its version while its release is still an unpublished draft: commit the fix, move the local annotated tag to that commit, and push the branch and tag together using a lease restricted to that tag and its previous remote object ID. This starts a fresh workflow with the correction. Rerunning an old workflow uses its original source commit and does not pick up the fix. Do not move an existing published tag. The manual workflow trigger is available for an existing version tag; selecting a branch is rejected.
+### Retry only Windows after a packaging fix
+
+When Linux and both Mac builds have already uploaded their installers and only Windows packaging needs a correction, commit the fix and push only `main`. Start a new manual Release run from `main` with `platform=windows` and the existing draft's `release_tag`:
+
+```sh
+git push origin main
+gh workflow run release.yml --repo AmrEmad0/MTTL-W01_APP --ref main \
+  -f platform=windows -f release_tag=v0.0.1-alpha.1
+```
+
+The workflow validates the corrected source, requires an unpublished draft, and updates its annotated tag to the selected `main` commit using the workflow token. This token does not start another workflow when it updates a tag; see [GitHub's trigger rules](https://docs.github.com/en/actions/concepts/security/github_token#when-github_token-triggers-workflow-runs). Only Windows installers are rebuilt. The existing Linux and Mac downloads are retained, all seven installers are verified, and the prerelease is published with updated checksums after Windows succeeds. Use this mode for Windows packaging fixes that leave the app and other platform builds unchanged. An app change requires fresh builds for all platforms.
+
+Do not push the moved version tag for this retry: a tag push starts the normal build of all platforms. After the retry, refresh the local tag with `git fetch --force origin tag v0.0.1-alpha.1`. In the GitHub UI, select **Actions → Release → Run workflow**, choose `main`, select `windows`, and enter the draft tag.
+
+For a code fix, push the correction on the development branch and create a new version and tag. The initial alpha can instead retain its version while its release is still an unpublished draft: commit the fix, move the local annotated tag to that commit, and push the branch and tag together using a lease restricted to that tag and its previous remote object ID. This starts a fresh workflow with the correction. Rerunning an old workflow uses its original source commit and does not pick up the fix. Do not move an existing published tag. Normal manual releases must select an existing version tag; only a Windows retry with an explicit draft tag can use `main`.
 
 ## Signing and availability
 
