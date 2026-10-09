@@ -1,6 +1,57 @@
 import { automationArabic } from "./automation.ar";
 // Clear Modern Standard Arabic. Technical protocol tokens remain unchanged.
 export const arabic: Record<string, string> = {
+  "Join strip Wi-Fi": "اتصل بشبكة المشترك",
+  "Return to destination Wi-Fi": "عُد إلى الشبكة المستهدفة",
+  "Your next step": "خطوتك التالية",
+  "Join the strip's setup Wi-Fi": "اتصل بشبكة Wi-Fi الخاصة بتهيئة المشترك",
+  "Open this computer's Wi-Fi menu and choose the strip's setup network.":
+    "افتح قائمة Wi-Fi على هذا الحاسوب واختر شبكة تهيئة المشترك.",
+  "Enter the strip password shown below.":
+    "أدخل كلمة مرور المشترك الموضّحة أدناه.",
+  "The strip network may show “No internet”. Stay connected until settings have been sent.":
+    "قد تظهر شبكة المشترك باسم «بدون إنترنت». ابقَ متصلاً حتى يكتمل إرسال الإعدادات.",
+  "Strip Wi-Fi name": "اسم شبكة Wi-Fi الخاصة بالمشترك",
+  "Password to join the strip": "كلمة المرور للاتصال بشبكة المشترك",
+  "Use the strip's setup Wi-Fi password. To show its derived password, enter the setup Wi-Fi name under manual setup.":
+    "استخدم كلمة مرور شبكة تهيئة المشترك. لعرض كلمة المرور المشتقة، أدخل اسم شبكة التهيئة ضمن التهيئة اليدوية.",
+  "This password joins the strip's temporary network. Your destination Wi-Fi credentials above will be sent to the strip.":
+    "تُستخدم هذه الكلمة للاتصال بشبكة المشترك المؤقتة. ستُرسل بيانات الشبكة المستهدفة أعلاه إلى المشترك.",
+  "If you already joined the strip's Wi-Fi, continue now. Scanning again is not required.":
+    "إذا كنت متصلاً بشبكة المشترك بالفعل، تابع الآن. لا يلزم إعادة الفحص.",
+  "Return to your destination Wi-Fi": "عُد إلى شبكة Wi-Fi المستهدفة",
+  "The strip has accepted the settings and is restarting. Open this computer's Wi-Fi menu and reconnect to the network below.":
+    "أكّد المشترك استلام الإعدادات وهو يعيد التشغيل. افتح قائمة Wi-Fi على هذا الحاسوب وأعد الاتصال بالشبكة الموضّحة أدناه.",
+  "After reconnecting, check the connection. This does not send the setup settings again.":
+    "بعد إعادة الاتصال، تحقّق من اتصال المشترك. لن تُرسل إعدادات التهيئة مرة أخرى.",
+  "I am connected — send settings": "أنا متصل — أرسل الإعدادات",
+  "I reconnected — check connection": "أعدت الاتصال — تحقّق من اتصال المشترك",
+  "Connect this computer to the strip's Wi-Fi. If you are already connected, continue below.":
+    "وصّل هذا الحاسوب بشبكة Wi-Fi الخاصة بالمشترك. إذا كنت متصلاً بالفعل، تابع أدناه.",
+  "Settings sent. Reconnect this computer to your destination Wi-Fi, then check the strip's connection.":
+    "أُرسلت الإعدادات. أعد توصيل هذا الحاسوب بشبكة Wi-Fi المستهدفة، ثم تحقّق من اتصال المشترك.",
+  "No verified connection yet. Keep this computer on the destination Wi-Fi. Check the controller address and allow MTTL Control through Windows Firewall on your private network, then check again.":
+    "لم يُؤكّد اتصال المشترك بعد. أبقِ هذا الحاسوب متصلاً بالشبكة المستهدفة. تحقّق من عنوان وحدة التحكم واسمح لتطبيق MTTL Control عبر جدار حماية Windows على شبكتك الخاصة، ثم أعد التحقّق.",
+  "Stopping setup. Wait for the current operation to finish.":
+    "جارٍ إيقاف التهيئة. انتظر انتهاء العملية الحالية.",
+  "Enter a valid IPv4 address and ports between 1 and 65535.":
+    "أدخل عنوان IPv4 صحيحًا ومنافذ بين 1 و65535.",
+  "Ready for guided setup": "جاهز للتهيئة خطوة بخطوة",
+  "Controller IPv4 on destination network":
+    "عنوان IPv4 لهذا الحاسوب على الشبكة المستهدفة",
+  "Keep this computer's destination-network address when joining the strip's Wi-Fi.":
+    "احتفظ بعنوان الحاسوب على الشبكة المستهدفة عند الاتصال بشبكة المشترك.",
+  "Keep your destination Wi-Fi details below. Choose a strip, join its Wi-Fi with the displayed password, send settings, then reconnect to your destination Wi-Fi and check the connection.":
+    "احتفظ ببيانات شبكة Wi-Fi المستهدفة أدناه. اختر مشتركًا، واتصل بشبكته بكلمة المرور المعروضة، ثم أرسل الإعدادات. بعدها عُد إلى الشبكة المستهدفة وتحقّق من اتصال المشترك.",
+  "Already connected? Continue without scanning":
+    "متصل بالمشترك بالفعل؟ تابع دون فحص",
+  "Strip setup Wi-Fi name (optional)": "اسم شبكة تهيئة المشترك (اختياري)",
+  "Continue with this strip": "تابع مع هذا المشترك",
+  "3. Return to destination Wi-Fi": "3. العودة إلى الشبكة المستهدفة",
+  "Keep this computer connected to the strip's setup Wi-Fi, check the strip is in setup mode, then retry. A Wi-Fi connection alone does not send the strip's settings.":
+    "أبقِ هذا الحاسوب متصلاً بشبكة تهيئة المشترك وتحقّق من أن المشترك في وضع التهيئة، ثم أعد المحاولة. الاتصال بشبكة Wi-Fi وحده لا يرسل إعدادات المشترك.",
+  "Join the strip's Wi-Fi using the displayed password, then choose 'I am connected — send settings'.":
+    "اتصل بشبكة المشترك بكلمة المرور المعروضة، ثم اختر «أنا متصل — أرسل الإعدادات».",
   "Wi-Fi password": "كلمة مرور Wi-Fi",
   "Show Wi-Fi password": "إظهار كلمة مرور Wi-Fi",
   "Hide Wi-Fi password": "إخفاء كلمة مرور Wi-Fi",

@@ -284,6 +284,11 @@ pub async fn derive_wifi_password(ssid: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub fn supports_automatic_wifi_setup() -> bool {
+    cfg!(target_os = "linux")
+}
+
+#[tauri::command]
 pub async fn get_system_wifi_info() -> Result<SystemWifiInfo, String> {
     tauri::async_runtime::spawn_blocking(detect_system_wifi)
         .await

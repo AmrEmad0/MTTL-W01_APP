@@ -4,7 +4,7 @@ A desktop app for controlling LG U+ / TONLY MTTL-W01 smart power strips on your 
 
 The app receives telemetry directly from the strips and stores it in a local SQLite database. It does not require a cloud account. This is an independent project, unaffiliated with LG U+ or TONLY.
 
-**0.0.1 Alpha 2** (`v0.0.1-alpha.2`) is a Windows-only update with native Wi-Fi discovery. The first alpha remains available for Linux and macOS. Expect rough edges; platform and hardware limitations are listed below.
+**0.0.1 Alpha 3** (`v0.0.1-alpha.3`) is a Windows-only update with guided strip setup and native Wi-Fi discovery. The first alpha remains available for Linux and macOS. Expect rough edges; platform and hardware limitations are listed below.
 
 ![MTTL Control power overview showing connected strips and live telemetry](screenshot.png)
 
@@ -36,7 +36,7 @@ The first Windows installers are unsigned, and macOS downloads use ad-hoc signat
 
 Linux is the primary development platform. The release workflow builds all listed platforms and runs their Rust checks; Windows and macOS hardware operation and native interface behavior still need hands-on verification. Automatic provisioning requires `nmcli` and a NetworkManager-managed Wi-Fi adapter on Linux; use manual device setup on Windows and macOS.
 
-Windows Wi-Fi discovery uses the native WLAN API. Enable Wi-Fi and the WLAN AutoConfig service. If Windows denies scanning, enable Location services and app location access under **Settings > Privacy & security > Location**, then click **Scan Wi-Fi** again. Discovery does not switch networks; Windows setup still requires joining the strip's access point manually.
+Windows Wi-Fi discovery uses the native WLAN API. Enable Wi-Fi and the WLAN AutoConfig service. If Windows denies scanning, enable Location services and app location access under **Settings > Privacy & security > Location**, then click **Scan Wi-Fi** again. To add a strip on Windows: enter the destination Wi-Fi credentials and this computer's IPv4 address on that network, choose the strip, and join its setup Wi-Fi using the displayed password. Select **I am connected — send settings**. After the strip accepts the settings, reconnect the computer to the destination Wi-Fi and select **I reconnected — check connection**. If you are already connected to the strip, choose **Already connected? Continue without scanning**. Keep the destination controller IPv4 address unchanged while joining the strip's temporary network.
 
 ## Build and run
 

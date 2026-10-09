@@ -2829,3 +2829,32 @@ input:not([dir]) {
   margin-top: 12px;
   accent-color: var(--accent-main);
 }
+
+.manual-wifi-steps {
+  margin-block: 16px;
+  padding: 20px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+}
+.manual-wifi-steps h4 {
+  margin: 0 0 12px;
+}
+.manual-wifi-steps li {
+  margin-block: 8px;
+}
+.manual-wifi-steps p {
+  line-height: 1.6;
+}
+.manual-wifi-credentials {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+  margin-block: 16px;
+}
+.manual-wifi-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}

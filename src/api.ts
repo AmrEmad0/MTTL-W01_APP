@@ -152,6 +152,8 @@ export const api = {
       },
     }),
   getSystemWifiInfo: () => native<SystemWifiInfo>("get_system_wifi_info"),
+  supportsAutomaticWifiSetup: () =>
+    native<boolean>("supports_automatic_wifi_setup"),
   autoProvision: (
     stripSsid: string,
     stripPassword: string,

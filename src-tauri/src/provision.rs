@@ -565,7 +565,7 @@ pub async fn auto_provision_pipeline(request: AutoSetupRequest) -> ProvisionResu
         };
     }
     if !cfg!(target_os = "linux") {
-        return ProvisionResult { settings_applied: false, network_restored: None, success: false, logs: vec![], message: "Automatic setup requires Linux NetworkManager. Join the strip Wi-Fi and use manual setup on this platform.".into() };
+        return ProvisionResult { settings_applied: false, network_restored: None, success: false, logs: vec![], message: "Join the strip's Wi-Fi using the displayed password, then choose 'I am connected — send settings'.".into() };
     }
     let previous = match tauri::async_runtime::spawn_blocking(detect_system_wifi).await {
         Ok(Ok(info)) => info

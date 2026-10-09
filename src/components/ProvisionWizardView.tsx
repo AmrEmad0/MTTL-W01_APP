@@ -1,3 +1,4 @@
+import { ManualWifiSteps } from "./ManualWifiSteps";
 import { displayName, localize, t } from "../i18n";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -25,6 +26,9 @@ import {
   canonicalMac,
   runtimeCandidates,
   settingsApplied,
+  stripJoinPassword,
+  usesAutomaticWifi,
+  sendStripSettings,
 } from "../provisioning";
 import type {
   DeviceInfo,
@@ -52,7 +56,14 @@ type PairingStep = 1 | 2 | 3 | 4;
 interface ActivePairing {
   target: ProvisionTarget;
   status:
-    "in_progress" | "verifying" | "success" | "failed" | "awaiting_identity";
+    | "awaiting_join"
+    | "awaiting_reconnect"
+    | "in_progress"
+    | "verifying"
+    | "success"
+    | "failed"
+    | "awaiting_identity";
+  manualNetwork: boolean;
   step: PairingStep;
   message: string;
   result?: ProvisionResult;
@@ -78,6 +89,7 @@ export function ProvisionWizardView({
   onSelectDevice,
 }: Props) {
   const native = isTauri();
+  const [automaticWifi, setAutomaticWifi] = useState(false);
   const [wifi, setWifi] = useState<SystemWifiInfo | null>(null);
   const [detecting, setDetecting] = useState(false);
   const [error, setError] = useState("");
@@ -103,8 +115,6 @@ export function ProvisionWizardView({
 
   // Active single-device pairing state (NO QUEUE!)
   const [pairing, setPairing] = useState<ActivePairing | null>(null);
-  const pairingRef = useRef<ActivePairing | null>(null);
-  pairingRef.current = pairing;
 
   const runningRef = useRef(false);
   const stopRef = useRef(false);
@@ -129,31 +139,39 @@ export function ProvisionWizardView({
     let active = true;
 
     void api
-      .getNetworkInfo()
-      .then((info) => {
-        if (active && usableIp(info.local_ip)) setControllerIp(info.local_ip);
+      .supportsAutomaticWifiSetup()
+      .then((supported) => {
+        if (active) setAutomaticWifi(supported);
       })
-      .catch((e) => {
-        if (active) setError(errorMessage(e));
-      });
+      .catch(() => {});
 
     setDetecting(true);
-    void api
-      .getSystemWifiInfo()
-      .then((info) => {
-        if (!active) return;
+    void Promise.allSettled([
+      api.getNetworkInfo(),
+      api.getSystemWifiInfo(),
+    ]).then(([network, discovery]) => {
+      if (!active) return;
+      if (discovery.status === "fulfilled") {
+        const info = discovery.value;
         setWifi(info);
-        if (info.active_ssid && !/^(TONLY|ONLY)_TAP_/.test(info.active_ssid)) {
-          setSsid(info.active_ssid);
-          setPassword(info.active_psk || "");
+        // Never guess the destination controller address from the strip's AP.
+        if (!info.active_ssid || !/^(TONLY|ONLY)_TAP_/.test(info.active_ssid)) {
+          if (
+            network.status === "fulfilled" &&
+            usableIp(network.value.local_ip)
+          ) {
+            setControllerIp((current) => current || network.value.local_ip);
+          }
+          if (info.active_ssid) {
+            setSsid((current) => current || info.active_ssid!);
+            setPassword((current) => current || info.active_psk || "");
+          }
         }
-      })
-      .catch((e) => {
-        if (active) setError(errorMessage(e));
-      })
-      .finally(() => {
-        if (active) setDetecting(false);
-      });
+      } else {
+        setError(errorMessage(discovery.reason));
+      }
+      setDetecting(false);
+    });
 
     void api
       .getServerStatus()
@@ -208,13 +226,42 @@ export function ProvisionWizardView({
     }
   }
 
+  async function beginPairing(target: ProvisionTarget) {
+    if (!native || runningRef.current || commandBusy) return;
+    setError("");
+    const supported = await api.supportsAutomaticWifiSetup().catch(() => false);
+    setAutomaticWifi(supported);
+    if (usesAutomaticWifi(target, supported)) {
+      await startPairing(target, true);
+      return;
+    }
+    setPairing({
+      target: {
+        ...target,
+        password: target.ssid
+          ? stripJoinPassword(target.ssid, target.password)
+          : undefined,
+      },
+      status: "awaiting_join",
+      manualNetwork: true,
+      step: 1,
+      message:
+        "Connect this computer to the strip's Wi-Fi. If you are already connected, continue below.",
+    });
+  }
+
   // --- START ONE-BY-ONE PAIRING ---
-  async function startPairing(target: ProvisionTarget) {
+  async function startPairing(
+    target: ProvisionTarget,
+    supported = automaticWifi,
+  ) {
     if (!native || runningRef.current) return;
     if (commandBusy) {
       setError("Please wait for ongoing plug commands to finish.");
       return;
     }
+
+    const automatic = usesAutomaticWifi(target, supported);
 
     // Validate network
     const trimmedSsid = ssid.trim();
@@ -236,16 +283,16 @@ export function ProvisionWizardView({
       return;
     }
 
-    try {
-      const server = await api.getServerStatus();
-      if (!server.running) {
-        throw new Error(
-          server.error ||
-            "Controller TCP listener is not running. Please start the service.",
-        );
-      }
-    } catch (e) {
-      setError(errorMessage(e));
+    if (
+      !Number.isInteger(Number(controllerPort)) ||
+      Number(controllerPort) < 1 ||
+      Number(controllerPort) > 65535 ||
+      !Number.isInteger(target.port) ||
+      target.port < 1 ||
+      target.port > 65535 ||
+      !usableIp(target.ip)
+    ) {
+      setError("Enter a valid IPv4 address and ports between 1 and 65535.");
       return;
     }
 
@@ -258,15 +305,22 @@ export function ProvisionWizardView({
     const initialPairing: ActivePairing = {
       target,
       status: "in_progress",
+      manualNetwork: !automatic,
       step: 1,
-      message:
-        target.mode === "auto"
-          ? `Connecting to strip Wi-Fi (${target.ssid || target.name})…`
-          : `Connecting to strip endpoint at ${target.ip}:${target.port}…`,
+      message: automatic
+        ? `Connecting to strip Wi-Fi (${target.ssid || target.name})…`
+        : `Connecting to strip endpoint at ${target.ip}:${target.port}…`,
     };
     setPairing(initialPairing);
 
     try {
+      const server = await api.getServerStatus();
+      if (!server.running) {
+        throw new Error(
+          server.error ||
+            "Controller TCP listener is not running. Please start the service.",
+        );
+      }
       // 1. Snapshot live devices baseline
       const live = await api.getDevices();
       const baseline = Object.fromEntries(
@@ -286,7 +340,6 @@ export function ProvisionWizardView({
         prev
           ? {
               ...prev,
-              step: 2,
               baseline,
               message:
                 "Applying controller address and destination Wi-Fi credentials…",
@@ -294,33 +347,14 @@ export function ProvisionWizardView({
           : null,
       );
 
-      const parsedCPort = parseInt(controllerPort, 10) || 10086;
-      let result: ProvisionResult;
-
-      if (target.mode === "auto") {
-        result = await api.autoProvision(
-          target.ssid!,
-          target.password || (await api.deriveWifiPassword(target.ssid!)),
-          trimmedController,
-          trimmedSsid,
-          password,
-          target.ip,
-          target.port,
-          target.bssid,
-          parsedCPort,
-          portStrategy,
-        );
-      } else {
-        result = await api.provisionDevice(
-          target.ip,
-          target.port,
-          trimmedController,
-          trimmedSsid,
-          password,
-          parsedCPort,
-          portStrategy,
-        );
-      }
+      const parsedCPort = Number(controllerPort);
+      const result = await sendStripSettings(api, target, supported, {
+        controllerIp: trimmedController,
+        controllerPort: parsedCPort,
+        homeSsid: trimmedSsid,
+        homePassword: password,
+        portStrategy,
+      });
 
       onDevicesChanged();
 
@@ -331,11 +365,7 @@ export function ProvisionWizardView({
                 ...prev,
                 status: "failed",
                 result,
-                message:
-                  result.message +
-                  (settingsApplied(result)
-                    ? " Settings were transmitted. Check connection or verify network."
-                    : " Could not configure strip. Check strip power and range."),
+                message: result.message,
               }
             : null,
         );
@@ -344,108 +374,23 @@ export function ProvisionWizardView({
         return;
       }
 
-      // 3. Verifying connection and telemetry
-      setPairing((prev) =>
-        prev
-          ? {
-              ...prev,
-              step: 4,
-              status: "verifying",
-              result,
-              message:
-                "Strip is rebooting and joining Wi-Fi. Waiting for incoming controller link…",
-            }
-          : null,
-      );
-
-      // 4. Verification loop (up to 60s)
-      const deadline = Date.now() + 60000;
-      let verified = false;
-
-      while (Date.now() < deadline && !stopRef.current) {
-        try {
-          const liveDevices = await api.getDevices();
-          const candidates = runtimeCandidates(
-            target,
-            liveDevices,
-            baseline,
-            [],
-          );
-
-          if (candidates.length > 0) {
-            // Check if expected MAC matches
-            if (canonicalMac(target.mac)) {
-              const matched =
-                candidates.find((d) => d.mac === canonicalMac(target.mac)) ||
-                candidates[0];
-              setPairing((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      status: "success",
-                      matchedMac: matched.mac,
-                      matchedDevice: matched,
-                      message: "Device paired successfully and online!",
-                    }
-                  : null,
-              );
-              onDevicesChanged();
-              verified = true;
-              break;
-            } else if (candidates.length === 1) {
-              // Unambiguous single newly connected strip! Automatically pair!
-              const matched = candidates[0];
-              setPairing((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      status: "success",
-                      matchedMac: matched.mac,
-                      matchedDevice: matched,
-                      message: "Device paired successfully and online!",
-                    }
-                  : null,
-              );
-              onDevicesChanged();
-              verified = true;
-              break;
-            } else {
-              // Multiple candidates connected: let user quickly identify
-              setPairing((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      status: "awaiting_identity",
-                      candidates,
-                      message:
-                        "Multiple new strips detected. Please select this physical strip.",
-                    }
-                  : null,
-              );
-              setSelectedCandidateMac(candidates[0].mac);
-              onDevicesChanged();
-              verified = true;
-              break;
-            }
-          }
-        } catch {
-          // ignore transient poll error
-        }
-        await new Promise((resolve) => setTimeout(resolve, 800));
-      }
-
-      if (!verified && !stopRef.current) {
+      if (!automatic) {
         setPairing((prev) =>
-          prev && prev.status === "verifying"
+          prev
             ? {
                 ...prev,
-                status: "failed",
+                status: "awaiting_reconnect",
+                step: 3,
+                result,
+                baseline,
                 message:
-                  "Timed out waiting for strip connection (60s). Check strip power, Wi-Fi signal, and controller port 10086.",
+                  "Settings sent. Reconnect this computer to your destination Wi-Fi, then check the strip's connection.",
               }
-            : prev,
+            : null,
         );
+        return;
       }
+      await verifyConnection(target, baseline, result);
     } catch (e) {
       setPairing((prev) =>
         prev
@@ -458,6 +403,134 @@ export function ProvisionWizardView({
       );
     } finally {
       runningRef.current = false;
+      if (stopRef.current) setPairing(null);
+      onBusyChange(false);
+      onDevicesChanged();
+    }
+  }
+
+  async function verifyConnection(
+    target: ProvisionTarget,
+    baseline: Record<string, number>,
+    result: ProvisionResult,
+  ) {
+    // Verify a new controller session with fresh telemetry.
+    setPairing((prev) =>
+      prev
+        ? {
+            ...prev,
+            step: 4,
+            status: "verifying",
+            result,
+            baseline,
+            message:
+              "Strip is rebooting and joining Wi-Fi. Waiting for incoming controller link…",
+          }
+        : null,
+    );
+
+    // 4. Verification loop (up to 60s)
+    const deadline = Date.now() + 60000;
+    let verified = false;
+
+    while (Date.now() < deadline && !stopRef.current) {
+      try {
+        const liveDevices = await api.getDevices();
+        const candidates = runtimeCandidates(target, liveDevices, baseline, []);
+
+        if (candidates.length > 0) {
+          // Check if expected MAC matches
+          if (canonicalMac(target.mac)) {
+            const matched =
+              candidates.find((d) => d.mac === canonicalMac(target.mac)) ||
+              candidates[0];
+            setPairing((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    status: "success",
+                    matchedMac: matched.mac,
+                    matchedDevice: matched,
+                    message: "Device paired successfully and online!",
+                  }
+                : null,
+            );
+            onDevicesChanged();
+            verified = true;
+            break;
+          } else if (candidates.length === 1) {
+            // Unambiguous single newly connected strip! Automatically pair!
+            const matched = candidates[0];
+            setPairing((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    status: "success",
+                    matchedMac: matched.mac,
+                    matchedDevice: matched,
+                    message: "Device paired successfully and online!",
+                  }
+                : null,
+            );
+            onDevicesChanged();
+            verified = true;
+            break;
+          } else {
+            // Multiple candidates connected: let user quickly identify
+            setPairing((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    status: "awaiting_identity",
+                    candidates,
+                    message:
+                      "Multiple new strips detected. Please select this physical strip.",
+                  }
+                : null,
+            );
+            setSelectedCandidateMac(candidates[0].mac);
+            onDevicesChanged();
+            verified = true;
+            break;
+          }
+        }
+      } catch {
+        // ignore transient poll error
+      }
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
+
+    if (!verified && !stopRef.current) {
+      setPairing((prev) =>
+        prev && prev.status === "verifying"
+          ? {
+              ...prev,
+              status: "failed",
+              message:
+                "No verified connection yet. Keep this computer on the destination Wi-Fi. Check the controller address and allow MTTL Control through Windows Firewall on your private network, then check again.",
+            }
+          : prev,
+      );
+    }
+  }
+
+  async function resumeVerification() {
+    if (
+      !pairing?.result ||
+      !pairing.baseline ||
+      runningRef.current ||
+      commandBusy
+    )
+      return;
+    runningRef.current = true;
+    stopRef.current = false;
+    onBusyChange(true);
+    setError("");
+    try {
+      await verifyConnection(pairing.target, pairing.baseline, pairing.result);
+    } finally {
+      runningRef.current = false;
+      if (stopRef.current) setPairing(null);
       onBusyChange(false);
       onDevicesChanged();
     }
@@ -468,7 +541,12 @@ export function ProvisionWizardView({
     if (!pairing || !selectedCandidateMac || runningRef.current) return;
     try {
       const live = await api.getDevices();
-      const matched = live.find((d) => d.mac === selectedCandidateMac);
+      const matched = runtimeCandidates(
+        pairing.target,
+        live,
+        pairing.baseline || {},
+        [],
+      ).find((d) => d.mac === selectedCandidateMac);
       if (!matched) {
         throw new Error(
           "Selected device is no longer reporting. Please recheck connection.",
@@ -490,9 +568,19 @@ export function ProvisionWizardView({
   // Cancel pairing during execution
   function handleCancelPairing() {
     stopRef.current = true;
-    runningRef.current = false;
-    onBusyChange(false);
-    setPairing(null);
+    if (runningRef.current) {
+      setPairing((prev) =>
+        prev
+          ? {
+              ...prev,
+              message:
+                "Stopping setup. Wait for the current operation to finish.",
+            }
+          : null,
+      );
+    } else {
+      setPairing(null);
+    }
   }
 
   // Reset pairing state to pair another strip
@@ -560,6 +648,8 @@ export function ProvisionWizardView({
 
   const detectedStrips = wifi?.detected_strip_aps || [];
   const isBusy = runningRef.current || commandBusy;
+  const settingsLocked =
+    isBusy || !!(pairing?.result && settingsApplied(pairing.result));
 
   return localize(
     <>
@@ -583,6 +673,17 @@ export function ProvisionWizardView({
       {!native && (
         <div className="notice">
           Device discovery and setup require the desktop application.
+        </div>
+      )}
+
+      {!automaticWifi && native && (
+        <div className="notice info">
+          <Wifi size={18} />
+          <span>
+            Keep your destination Wi-Fi details below. Choose a strip, join its
+            Wi-Fi with the displayed password, send settings, then reconnect to
+            your destination Wi-Fi and check the connection.
+          </span>
         </div>
       )}
 
@@ -626,7 +727,7 @@ export function ProvisionWizardView({
               dir="auto"
               className="input-field"
               value={ssid}
-              disabled={isBusy}
+              disabled={settingsLocked}
               placeholder="e.g. MyHome_WiFi"
               onChange={(e) => setSsid(e.target.value)}
               autoComplete="off"
@@ -647,7 +748,7 @@ export function ProvisionWizardView({
                 className="input-field"
                 type={showPassword ? "text" : "password"}
                 value={password}
-                disabled={isBusy}
+                disabled={settingsLocked}
                 placeholder="Wi-Fi password"
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="new-password"
@@ -666,7 +767,7 @@ export function ProvisionWizardView({
                 aria-label={
                   showPassword ? "Hide Wi-Fi password" : "Show Wi-Fi password"
                 }
-                disabled={isBusy}
+                disabled={settingsLocked}
               >
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -674,12 +775,12 @@ export function ProvisionWizardView({
           </label>
 
           <label className="field-label">
-            Controller local IPv4
+            Controller IPv4 on destination network
             <input
               dir="ltr"
               className="input-field"
               value={controllerIp}
-              disabled={isBusy}
+              disabled={settingsLocked}
               placeholder="192.168.1.10"
               onChange={(e) => setControllerIp(e.target.value)}
             />
@@ -691,7 +792,8 @@ export function ProvisionWizardView({
                 display: "inline-block",
               }}
             >
-              ● This computer's address on your network
+              Keep this computer's destination-network address when joining the
+              strip's Wi-Fi.
             </span>
           </label>
         </div>
@@ -713,7 +815,7 @@ export function ProvisionWizardView({
                 dir="ltr"
                 className="input-field"
                 value={controllerPort}
-                disabled={isBusy}
+                disabled={settingsLocked}
                 onChange={(e) => setControllerPort(e.target.value)}
                 placeholder="10086"
               />
@@ -724,7 +826,7 @@ export function ProvisionWizardView({
               <select
                 className="input-field"
                 value={portStrategy}
-                disabled={isBusy}
+                disabled={settingsLocked}
                 onChange={(e) => setPortStrategy(e.target.value)}
               >
                 <option value="standard">
@@ -830,7 +932,12 @@ export function ProvisionWizardView({
                     color: "var(--accent-cyan)",
                   }}
                 >
-                  <Loader2 size={24} className="spin" />
+                  {pairing.status === "awaiting_join" ||
+                  pairing.status === "awaiting_reconnect" ? (
+                    <Wifi size={24} />
+                  ) : (
+                    <Loader2 size={24} className="spin" />
+                  )}
                 </div>
               )}
               <div>
@@ -839,14 +946,18 @@ export function ProvisionWizardView({
                     ? "Pairing complete!"
                     : pairing.status === "failed"
                       ? "Pairing needs attention"
-                      : pairing.status === "awaiting_identity"
-                        ? "Confirm device identity"
-                        : `Pairing ${pairing.target.name || "Power Strip"}…`}
+                      : pairing.status === "awaiting_join"
+                        ? "Join strip Wi-Fi"
+                        : pairing.status === "awaiting_reconnect"
+                          ? "Return to destination Wi-Fi"
+                          : pairing.status === "awaiting_identity"
+                            ? "Confirm device identity"
+                            : `Pairing ${pairing.target.name || "Power Strip"}…`}
                 </h3>
                 <span
                   style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}
                 >
-                  {pairing.target.mode === "auto" ? (
+                  {pairing.target.ssid ? (
                     <>
                       <span>{t("Wi-Fi AP:")} </span>
                       <bdi dir="ltr">{pairing.target.ssid}</bdi>
@@ -888,9 +999,12 @@ export function ProvisionWizardView({
                 ? "Paired & Verified"
                 : pairing.status === "failed"
                   ? "Failed"
-                  : pairing.status === "verifying"
-                    ? "Verifying Link"
-                    : "Configuring"}
+                  : pairing.status === "awaiting_join" ||
+                      pairing.status === "awaiting_reconnect"
+                    ? "Your next step"
+                    : pairing.status === "verifying"
+                      ? "Verifying Link"
+                      : "Configuring"}
             </span>
           </div>
 
@@ -906,7 +1020,12 @@ export function ProvisionWizardView({
             {[
               { num: 1, label: "1. Connect Strip" },
               { num: 2, label: "2. Send Config" },
-              { num: 3, label: "3. Restore Wi-Fi" },
+              {
+                num: 3,
+                label: pairing.manualNetwork
+                  ? "3. Return to destination Wi-Fi"
+                  : "3. Restore Wi-Fi",
+              },
               { num: 4, label: "4. Verify Link" },
             ].map((s) => {
               const isPast =
@@ -950,7 +1069,12 @@ export function ProvisionWizardView({
                   {isPast ? (
                     <Check size={14} />
                   ) : isCurrent ? (
-                    <Loader2 size={13} className="spin" />
+                    pairing.status === "awaiting_join" ||
+                    pairing.status === "awaiting_reconnect" ? (
+                      <Wifi size={13} />
+                    ) : (
+                      <Loader2 size={13} className="spin" />
+                    )
                   ) : null}
                   {s.label}
                 </div>
@@ -973,7 +1097,35 @@ export function ProvisionWizardView({
             }}
           >
             {pairing.message}
+            {pairing.status === "failed" &&
+              !pairing.result?.settings_applied &&
+              pairing.manualNetwork && (
+                <p>
+                  Keep this computer connected to the strip's setup Wi-Fi, check
+                  the strip is in setup mode, then retry. A Wi-Fi connection
+                  alone does not send the strip's settings.
+                </p>
+              )}
           </div>
+
+          {pairing.manualNetwork &&
+            (pairing.status === "awaiting_join" ||
+              pairing.status === "awaiting_reconnect") && (
+              <ManualWifiSteps
+                stage={
+                  pairing.status === "awaiting_join" ? "join" : "reconnect"
+                }
+                target={pairing.target}
+                homeSsid={ssid}
+                busy={isBusy}
+                onContinue={() =>
+                  void (pairing.status === "awaiting_join"
+                    ? startPairing(pairing.target, false)
+                    : resumeVerification())
+                }
+                onCancel={handlePairAnother}
+              />
+            )}
 
           {/* Awaiting Identity confirmation if ambiguous */}
           {pairing.status === "awaiting_identity" && pairing.candidates && (
@@ -1071,11 +1223,17 @@ export function ProvisionWizardView({
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={() => void startPairing(pairing.target)}
+                  onClick={() =>
+                    void (pairing.result && settingsApplied(pairing.result)
+                      ? resumeVerification()
+                      : beginPairing(pairing.target))
+                  }
                   style={{ display: "flex", alignItems: "center", gap: "8px" }}
                 >
                   <RotateCcw size={16} />
-                  Retry pairing
+                  {pairing.result && settingsApplied(pairing.result)
+                    ? "Check connection again"
+                    : "Retry pairing"}
                 </button>
                 <button
                   type="button"
@@ -1178,6 +1336,20 @@ export function ProvisionWizardView({
                       >
                         BSSID: {ap.bssid || "Standard"}
                       </span>
+                      <label
+                        className="field-label"
+                        style={{ marginTop: "10px" }}
+                      >
+                        Password to join the strip
+                        <input
+                          className="input-field"
+                          dir="ltr"
+                          readOnly
+                          value={
+                            ap.derived_password || stripJoinPassword(ap.ssid)
+                          }
+                        />
+                      </label>
                       <span
                         style={{
                           fontSize: "0.75rem",
@@ -1186,7 +1358,9 @@ export function ProvisionWizardView({
                           display: "inline-block",
                         }}
                       >
-                        ● Ready for one-click setup
+                        {automaticWifi
+                          ? "● Ready for one-click setup"
+                          : "Ready for guided setup"}
                       </span>
                     </div>
                   </div>
@@ -1196,7 +1370,7 @@ export function ProvisionWizardView({
                     className="btn btn-primary"
                     disabled={isBusy}
                     onClick={() =>
-                      void startPairing({
+                      void beginPairing({
                         id: crypto.randomUUID(),
                         mode: "auto",
                         name: ap.ssid,
@@ -1254,6 +1428,23 @@ export function ProvisionWizardView({
               </p>
             </div>
           )}
+
+          <button
+            type="button"
+            className="btn btn-glass"
+            disabled={isBusy}
+            onClick={() => {
+              setManualMode("manual");
+              setShowManualForm(true);
+              if (
+                wifi?.active_ssid &&
+                /^(TONLY|ONLY)_TAP_/.test(wifi.active_ssid)
+              )
+                setManualSsid(wifi.active_ssid);
+            }}
+          >
+            Already connected? Continue without scanning
+          </button>
 
           {/* COLLAPSIBLE MANUAL / DIRECT IP SETUP */}
           <div
@@ -1357,6 +1548,16 @@ export function ProvisionWizardView({
                   ) : (
                     <>
                       <label className="field-label">
+                        Strip setup Wi-Fi name (optional)
+                        <input
+                          className="input-field"
+                          dir="auto"
+                          placeholder="TONLY_TAP_..."
+                          value={manualSsid}
+                          onChange={(e) => setManualSsid(e.target.value)}
+                        />
+                      </label>
+                      <label className="field-label">
                         Strip setup IPv4
                         <input
                           dir="ltr"
@@ -1375,6 +1576,17 @@ export function ProvisionWizardView({
                         />
                       </label>
                     </>
+                  )}
+                  {manualSsid.trim() && (
+                    <label className="field-label">
+                      Password to join the strip
+                      <input
+                        className="input-field"
+                        dir="ltr"
+                        readOnly
+                        value={stripJoinPassword(manualSsid, manualPassword)}
+                      />
+                    </label>
                   )}
                   <label className="field-label">
                     Expected runtime MAC (optional)
@@ -1409,23 +1621,22 @@ export function ProvisionWizardView({
                         );
                         return;
                       }
-                      void startPairing({
+                      void beginPairing({
                         id: crypto.randomUUID(),
                         mode: manualMode,
                         name:
                           manualMode === "auto"
                             ? manualSsid.trim()
                             : manualIp.trim(),
-                        ssid:
-                          manualMode === "auto" ? manualSsid.trim() : undefined,
-                        password: manualPassword.trim() || undefined,
+                        ssid: manualSsid.trim() || undefined,
+                        password: manualPassword || undefined,
                         ip: manualIp.trim() || "192.168.1.1",
                         port: Number(manualPort) || 30300,
                         mac: canonicalMac(manualMac) || undefined,
                       });
                     }}
                   >
-                    Pair manual device
+                    Continue with this strip
                   </button>
                 </div>
               </div>

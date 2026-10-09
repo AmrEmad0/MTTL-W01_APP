@@ -5,7 +5,12 @@ import {
   mergeTargets,
   runtimeCandidates,
   settingsApplied,
+  sendStripSettings,
+  stripJoinPassword,
 } from "../src/provisioning";
+import { renderToStaticMarkup } from "react-dom/server";
+import { setLanguage } from "../src/i18n";
+import { ManualWifiSteps } from "../src/components/ManualWifiSteps";
 import { initialTheme } from "../src/theme";
 import type { DeviceInfo, NetworkHost, ProvisionTarget } from "../src/types";
 const target = (overrides: Partial<ProvisionTarget> = {}): ProvisionTarget => ({
@@ -133,5 +138,115 @@ describe("commissioning verification", () => {
   });
   test("dark is the initial theme without stored preferences", () => {
     expect(initialTheme()).toBe("dark");
+  });
+});
+
+describe("guided Wi-Fi setup", () => {
+  test("Windows sends settings directly even for a discovered AP", async () => {
+    const calls: { command: string; args: unknown[] }[] = [];
+    const result = {
+      success: true,
+      settings_applied: true,
+      network_restored: null,
+      logs: [],
+      message: "Accepted",
+    };
+    const transport = {
+      autoProvision: async (...args: unknown[]) => {
+        calls.push({ command: "auto", args });
+        return result;
+      },
+      provisionDevice: async (...args: unknown[]) => {
+        calls.push({ command: "manual", args });
+        return result;
+      },
+    };
+    const settings = {
+      controllerIp: "192.168.1.96",
+      controllerPort: 10086,
+      homeSsid: "Home",
+      homePassword: " home password ",
+      portStrategy: "standard",
+    };
+    const selected = target({ ssid: "TONLY_TAP_991BDD8" });
+    expect(await sendStripSettings(transport, selected, false, settings)).toBe(
+      result,
+    );
+    expect(calls).toEqual([
+      {
+        command: "manual",
+        args: [
+          "192.168.1.1",
+          30300,
+          "192.168.1.96",
+          "Home",
+          " home password ",
+          10086,
+          "standard",
+        ],
+      },
+    ]);
+    calls.length = 0;
+    await sendStripSettings(transport, selected, true, settings);
+    expect(calls[0].command).toBe("auto");
+    expect(calls[0].args[1]).toBe("LGU_991BDD8");
+    calls.length = 0;
+    await sendStripSettings(
+      transport,
+      { ...selected, mode: "manual" },
+      true,
+      settings,
+    );
+    expect(calls[0].command).toBe("manual");
+  });
+  test("derives join password and preserves an explicit password exactly", () => {
+    expect(stripJoinPassword("TONLY_TAP_991BDD8")).toBe("LGU_991BDD8");
+    expect(stripJoinPassword(" ONLY_TAP_ABCDEF ")).toBe("LGU_ABCDEF");
+    expect(stripJoinPassword("TONLY_TAP_ABCDEF", " custom password ")).toBe(
+      " custom password ",
+    );
+    expect(stripJoinPassword("")).toBe("");
+  });
+  test("join and reconnect steps show distinct networks and localized actions", () => {
+    const props = {
+      target: target({ ssid: "TONLY_TAP_991BDD8" }),
+      homeSsid: "Online",
+      busy: false,
+      onContinue: () => {},
+      onCancel: () => {},
+    };
+    try {
+      setLanguage("en");
+      const join = renderToStaticMarkup(
+        <ManualWifiSteps {...props} stage="join" />,
+      );
+      expect(join).toContain("LGU_991BDD8");
+      expect(join).toContain("I am connected — send settings");
+      expect(join).toContain("Scanning again is not required");
+      expect(join).not.toContain("Linux");
+      const reconnect = renderToStaticMarkup(
+        <ManualWifiSteps {...props} stage="reconnect" />,
+      );
+      expect(reconnect).toContain('value="Online"');
+      expect(reconnect).toContain("I reconnected — check connection");
+      expect(reconnect).not.toContain("LGU_991BDD8");
+      setLanguage("ar");
+      const arabicJoin = renderToStaticMarkup(
+        <ManualWifiSteps {...props} stage="join" />,
+      );
+      expect(arabicJoin).toContain("كلمة المرور للاتصال بشبكة المشترك");
+      expect(arabicJoin).toContain("أنا متصل — أرسل الإعدادات");
+      expect(arabicJoin).toContain("LGU_991BDD8");
+      expect(arabicJoin).not.toContain("I am connected");
+      const arabicReconnect = renderToStaticMarkup(
+        <ManualWifiSteps {...props} stage="reconnect" />,
+      );
+      expect(arabicReconnect).toContain('value="Online"');
+      expect(arabicReconnect).toContain(
+        "أعدت الاتصال — تحقّق من اتصال المشترك",
+      );
+    } finally {
+      setLanguage("en");
+    }
   });
 });

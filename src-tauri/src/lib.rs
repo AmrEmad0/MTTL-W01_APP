@@ -77,6 +77,7 @@ pub fn run() {
             derive_wifi_password,
             provision_device,
             get_system_wifi_info,
+            supports_automatic_wifi_setup,
             auto_provision,
             connect_system_wifi,
             get_server_status,
