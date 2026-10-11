@@ -8,6 +8,7 @@ import tomllib
 
 
 def check_msi_version(version: str, override: str | None) -> None:
+    """Validate that the MSI (WiX) version is numeric, within bounds, and matches the app version."""
     msi_version = override if override is not None else version.replace("-", ".", 1)
     setting = "bundle.windows.wix.version"
     if not isinstance(msi_version, str) or not re.fullmatch(
@@ -31,6 +32,7 @@ def check_msi_version(version: str, override: str | None) -> None:
 
 
 def check_release(tag: str, ref_type: str, root: Path) -> dict[str, str]:
+    """Validate the release tag, manifest versions, MSI version, and release notes, returning release metadata."""
     number = r"(?:0|[1-9][0-9]*)"
     identifier = r"(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)"
     if ref_type != "tag" or not re.fullmatch(

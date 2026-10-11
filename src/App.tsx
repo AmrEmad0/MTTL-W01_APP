@@ -75,6 +75,7 @@ type Target = {
 };
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Root application component. Applies the active language, direction, and window title on startup and on change, then renders the current view. */
 export default function App() {
   const native = isTauri();
   const automation = useAutomation(native);
