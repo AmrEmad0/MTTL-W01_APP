@@ -6,6 +6,7 @@ import sys
 
 
 def expected_assets(version: str, platform: str = "all") -> set[str]:
+    """Return the installer filenames required for this version, restricted to Windows assets when requested."""
     if platform not in ("all", "windows"):
         raise ValueError(f"Unsupported release platform: {platform}")
     prefix = f"MTTL-Control_{version}_"
@@ -27,6 +28,7 @@ def expected_assets(version: str, platform: str = "all") -> set[str]:
 
 
 def verify_assets(directory: Path, version: str, platform: str = "all") -> Path:
+    """Check that every expected, non-empty, correctly named asset is present, then write a SHA256SUMS.txt file."""
     files = sorted(
         path for path in directory.iterdir()
         if path.is_file() and path.name != "SHA256SUMS.txt"

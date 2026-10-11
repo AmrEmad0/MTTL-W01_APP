@@ -8,6 +8,7 @@ import {
 import { arabic } from "./locales/ar";
 
 export type Language = "ar" | "en";
+/** Resolve the startup language: the saved preference, or Arabic for an Arabic system locale and English otherwise. */
 export function initialLanguage(): Language {
   try {
     const saved = localStorage.getItem("mttl-language");
@@ -26,6 +27,7 @@ const listeners = new Set<() => void>();
 export const getLanguage = () => language;
 export const localeTag = () =>
   language === "ar" ? "ar-EG-u-nu-latn" : "en-GB";
+/** Sync the document's language, text direction, and title with the given language, and persist the choice. */
 export function applyLanguage(value: Language): void {
   if (typeof document !== "undefined") {
     document.documentElement.lang = value;
@@ -41,11 +43,13 @@ export function applyLanguage(value: Language): void {
     /* Language still works without storage. */
   }
 }
+/** Set the active language, apply it to the document, and notify subscribed components. */
 export function setLanguage(value: Language): void {
   language = value;
   applyLanguage(value);
   listeners.forEach((listener) => listener());
 }
+/** Subscribe the calling component to the active language, re-rendering it whenever the language changes. */
 export function useLanguage(): Language {
   return useSyncExternalStore(
     (listener) => {
