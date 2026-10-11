@@ -78,3 +78,7 @@ The first release has unsigned Windows installers and ad-hoc macOS signatures. A
 Release creation uses GitHub's built-in workflow token, with write access restricted to release jobs. No personal token is required. The workflows pin actions by commit and install frontend dependencies with the lockfile.
 
 Repository visibility controls who can access the source and downloads. A release in a private repository is private; publishing a release does not make the repository public.
+
+## Development promotion and AppImage catalog
+
+Develop in `AmrEmad0/LG_RUST` and promote reviewed changes into the current public source in `AmrEmad0/MTTL-W01_APP`. Release publishing is restricted to the public repository. See [the AppImage release guide](APPIMAGE_RELEASE.md) for the Alpha 4 catalog fix, promotion steps, and `/retest` instructions.

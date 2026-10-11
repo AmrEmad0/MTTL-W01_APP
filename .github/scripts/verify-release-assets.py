@@ -12,9 +12,9 @@ def expected_assets(version: str, platform: str = "all") -> set[str]:
     expected = {
         prefix + suffix
         for suffix in (
-            "linux_amd64.deb",
-            "linux_x86_64.rpm",
-            "linux_amd64.AppImage",
+            "amd64.deb",
+            "x86_64.rpm",
+            "amd64.AppImage",
             "windows_x64-setup.exe",
             "windows_x64.msi",
             "darwin_aarch64.dmg",

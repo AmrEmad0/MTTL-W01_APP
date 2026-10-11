@@ -10,10 +10,15 @@ import { arabic } from "./locales/ar";
 export type Language = "ar" | "en";
 export function initialLanguage(): Language {
   try {
-    return localStorage.getItem("mttl-language") === "en" ? "en" : "ar";
+    const saved = localStorage.getItem("mttl-language");
+    if (saved === "ar" || saved === "en") return saved;
   } catch {
-    return "ar";
+    /* Fall back to the system language when storage is unavailable. */
   }
+  return typeof navigator !== "undefined" &&
+    /^ar(?:[-_]|$)/i.test(navigator.language)
+    ? "ar"
+    : "en";
 }
 let language: Language =
   typeof window === "undefined" ? "en" : initialLanguage();

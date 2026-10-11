@@ -162,6 +162,14 @@ class AssetTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unsupported release platform"):
             assets.verify_assets(self.directory, self.version, "macos")
 
+    def test_old_appimage_name_does_not_satisfy_release_gate(self):
+        (self.directory / f"MTTL-Control_{self.version}_amd64.AppImage").rename(
+            self.directory / f"MTTL-Control_{self.version}_linux_amd64.AppImage"
+        )
+        with self.assertRaisesRegex(ValueError, "Missing release assets"):
+            assets.verify_assets(self.directory, self.version)
+        self.assertFalse((self.directory / "SHA256SUMS.txt").exists())
+
     def test_missing_architecture_never_writes_checksums(self):
         (self.directory / f"MTTL-Control_{self.version}_darwin_aarch64.dmg").unlink()
         with self.assertRaisesRegex(ValueError, "Missing release assets"):
