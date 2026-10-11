@@ -32,6 +32,7 @@ defaults:
 jobs:
   prepare:
     name: Check version and prepare draft
+    if: github.repository == 'AmrEmad0/MTTL-W01_APP'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -179,7 +180,7 @@ jobs:
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} -- --locked
           uploadUpdaterJson: false
           uploadUpdaterSignatures: false
-          releaseAssetNamePattern: "MTTL-Control_[version]_[platform]_[arch][setup][ext]"
+          releaseAssetNamePattern: ${{ runner.os == 'Linux' && 'MTTL-Control_[version]_[arch][setup][ext]' || 'MTTL-Control_[version]_[platform]_[arch][setup][ext]' }}
 
   publish:
     name: Verify assets and publish

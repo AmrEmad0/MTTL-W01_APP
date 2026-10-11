@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   displayName,
@@ -17,9 +18,78 @@ import type { OutletState } from "../src/types";
 
 beforeEach(() => setLanguage("ar"));
 afterEach(() => setLanguage("en"));
+describe("startup language", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const bootstrap = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].find(
+    (match) => match[1].includes("mttl-language"),
+  )![1];
+
+  for (const [saved, system, blocked, expected] of [
+    [null, "en-US", false, "en"],
+    [null, "ar-EG", false, "ar"],
+    [null, "AR-sa", false, "ar"],
+    [null, "ar", false, "ar"],
+    [null, "fr-FR", false, "en"],
+    [null, "C", false, "en"],
+    [null, "", false, "en"],
+    ["invalid", "en-GB", false, "en"],
+    ["en", "ar-EG", false, "en"],
+    ["ar", "en-US", false, "ar"],
+    [null, "en-US", true, "en"],
+    [null, "ar-EG", true, "ar"],
+    [null, undefined, true, "en"],
+  ] as const) {
+    test(`saved=${saved}, system=${system}, blocked=${blocked}: ${expected}`, () => {
+      const descriptors = ["localStorage", "navigator"].map(
+        (key) =>
+          [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
+      );
+      const storage = {
+        getItem: () => {
+          if (blocked)
+            throw new DOMException("Storage unavailable", "SecurityError");
+          return saved;
+        },
+      };
+      const systemNavigator =
+        system === undefined ? undefined : { language: system };
+      Object.defineProperty(globalThis, "localStorage", {
+        configurable: true,
+        value: storage,
+      });
+      Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: systemNavigator,
+      });
+      try {
+        expect(initialLanguage()).toBe(expected);
+        const document = { documentElement: { lang: "", dir: "" }, title: "" };
+        new Function("localStorage", "navigator", "document", bootstrap)(
+          storage,
+          systemNavigator ?? { language: "" },
+          document,
+        );
+        expect(document.documentElement.lang).toBe(expected);
+        expect(document.documentElement.dir).toBe(
+          expected === "ar" ? "rtl" : "ltr",
+        );
+        expect(document.title).toBe(
+          expected === "ar"
+            ? "MTTL Control | إدارة الطاقة"
+            : "MTTL Control | Power Control",
+        );
+      } finally {
+        for (const [key, descriptor] of descriptors) {
+          if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+          else Reflect.deleteProperty(globalThis, key);
+        }
+      }
+    });
+  }
+});
+
 describe("Arabic operating interface", () => {
-  test("Arabic is the default without a saved preference, and English switching is reversible", () => {
-    expect(initialLanguage()).toBe("ar");
+  test("switching between Arabic and English is reversible", () => {
     expect(getLanguage()).toBe("ar");
     expect(t("Power overview")).toBe("نظرة عامة على الطاقة");
     expect(localeTag()).toStartWith("ar-EG");

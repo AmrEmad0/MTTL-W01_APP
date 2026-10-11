@@ -1,10 +1,12 @@
 # MTTL Control
 
+The application is named **MTTL Control**; **MTTL-W01** is the supported hardware model and appears in the repository name.
+
 A desktop app for controlling LG U+ / TONLY MTTL-W01 smart power strips on your local network. Built with Rust, Tauri 2, React, and TypeScript. Licensed under [MIT](LICENSE).
 
 The app receives telemetry directly from the strips and stores it in a local SQLite database. It does not require a cloud account. This is an independent project, unaffiliated with LG U+ or TONLY.
 
-**0.0.1 Alpha 3** (`v0.0.1-alpha.3`) is a Windows-only update with guided strip setup and native Wi-Fi discovery. The first alpha remains available for Linux and macOS. Expect rough edges; platform and hardware limitations are listed below.
+**0.0.1 Alpha 4** (`v0.0.1-alpha.4`) prepares refreshed builds for all desktop platforms, with system-language selection and English fallback. It retains the Windows guided strip setup and native Wi-Fi discovery from Alpha 3. Expect rough edges; platform and hardware limitations are listed below.
 
 ![MTTL Control power overview showing connected strips and live telemetry](screenshot.png)
 
@@ -112,3 +114,5 @@ These run frontend linting, formatting, tests, TypeScript checks, the production
 - `power_d.py` — earlier standalone Python controller used for protocol experiments; it is not part of the desktop build. Run `python3 power_d.py selftest` for its offline check.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for changes, tests, and hardware reports. Project code is MIT-licensed; bundled fonts and dependencies keep their own licenses, documented in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+For development-to-production promotion and the AppImage catalog retest, see [the AppImage release guide](docs/APPIMAGE_RELEASE.md).
